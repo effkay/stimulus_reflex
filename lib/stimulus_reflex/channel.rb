@@ -46,8 +46,12 @@ class StimulusReflex::Channel < ActionCable::Channel::Base
   end
 
   def render_page_and_broadcast_morph(url, reflex)
-    html = render_page(url, reflex)
-    broadcast_morph url, html if html.present?
+    if reflex.respond_to? :rendered_component
+      broadcast_morph reflex.rendered_component, reflex.selector
+    else
+      html = render_page(url, reflex)
+      broadcast_morph html if html.present?
+    end
   end
 
   def render_page(url, reflex)
@@ -81,10 +85,21 @@ class StimulusReflex::Channel < ActionCable::Channel::Base
     controller.response.body
   end
 
-  def broadcast_morph(url, html)
-    html = extract_body_html(html)
-    cable_ready[stream_name].morph selector: "body", html: html, children_only: true
+  def broadcast_morph(html, selector = nil)
+    if selector.present?
+      html = extract_partial_html(html)
+    else
+      html = extract_body_html(html)
+      selector = "body"
+    end
+
+    cable_ready[stream_name].morph selector: selector, html: html, children_only: true
     cable_ready.broadcast
+  end
+
+  def extract_partial_html(html)
+    doc = Nokogiri::HTML::DocumentFragment.parse(html)
+    doc.to_s
   end
 
   def extract_body_html(html)
